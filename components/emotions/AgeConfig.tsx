@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useState } from 'react';
-import { ArrowLeft, Settings, User, Palette, Camera, Home, Brain, BookOpen } from 'lucide-react-native';
+import { ArrowLeft, Settings, User, Palette, Camera, Chrome as Home, Brain, BookOpen } from 'lucide-react-native';
 
 interface Props {
   currentAge: number;

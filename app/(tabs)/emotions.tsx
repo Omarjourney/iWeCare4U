@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Alert } from 'react-native';
 import { useState, useEffect } from 'react';
-import { Heart, Palette, Camera, Home, Brain, BookOpen, Settings } from 'lucide-react-native';
+import { Heart, Palette, Camera, Chrome as Home, Brain, BookOpen, Settings } from 'lucide-react-native';
 import { MoodSelector } from '@/components/emotions/MoodSelector';
 import { ColorCloudPicker } from '@/components/emotions/ColorCloudPicker';
 import { ExpressGame } from '@/components/emotions/ExpressGame';
