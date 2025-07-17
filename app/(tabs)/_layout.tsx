@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { User, Calendar, MessageCircle, Activity, Settings } from 'lucide-react-native';
+import { User, Calendar, MessageCircle, Activity, Settings, Heart } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -27,6 +27,15 @@ export default function TabLayout() {
           title: 'Dashboard',
           tabBarIcon: ({ size, color }) => (
             <User size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="emotions"
+        options={{
+          title: 'Emotions',
+          tabBarIcon: ({ size, color }) => (
+            <Heart size={size} color={color} />
           ),
         }}
       />
