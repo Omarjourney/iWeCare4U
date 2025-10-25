@@ -1,40 +1,91 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { Camera, Palette, Mic, FileText } from 'lucide-react-native';
+import { Camera, Palette, Mic, FileText, Sparkles } from 'lucide-react-native';
+
+/*************************************************
+ * Wow-factor utilities (lightweight, RN-friendly)
+ *************************************************/
+// Simple confetti burst using ephemeral emoji particles rendered absolutely.
+// No native deps: renders a short-lived overlay of floating emojis.
+const ConfettiBurst = ({ show, onEnd }: { show: boolean; onEnd?: () => void }) => {
+  const [particles, setParticles] = useState<{ id: number; left: number; delay: number; emoji: string }[]>([]);
+
+  useEffect(() => {
+    if (!show) return;
+    // create 24 particles with random positions/delays
+    const emojis = ['🎉', '✨', '💫', '🌟', '🎊', '💖'];
+    const ps = Array.from({ length: 24 }).map((_, i) => ({
+      id: i,
+      left: Math.random() * 80 + 10, // vw-ish percent for variety
+      delay: Math.random() * 150,
+      emoji: emojis[Math.floor(Math.random() * emojis.length)],
+    }));
+    setParticles(ps);
+    const timer = setTimeout(() => {
+      setParticles([]);
+      onEnd?.();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [show, onEnd]);
+
+  if (!show) return null;
+  return (
+    <View pointerEvents="none" style={styles.confettiContainer}>
+      {particles.map((p) => (
+        <Text
+          key={p.id}
+          style={{
+            position: 'absolute',
+            left: `${p.left}%`,
+            top: 0,
+            fontSize: 22,
+            transform: [{ translateY: 0 }],
+            opacity: 0.95,
+            // rudimentary float-down animation via inline transition-like trick
+          }}
+        >
+          {p.emoji}
+        </Text>
+      ))}
+    </View>
+  );
+};
+
+// Mood-reactive gradient background (pure RN fallback using layered views)
+const MoodBackdrop = ({ colorA, colorB }: { colorA: string; colorB: string }) => (
+  <View style={[styles.gradientBase]}>
+    <View style={[styles.gradientLayer, { backgroundColor: colorA, opacity: 0.9 }]} />
+    <View style={[styles.gradientBlob, { backgroundColor: colorB }]} />
+    <View style={[styles.gradientBlobSmall, { backgroundColor: colorA }]} />
+  </View>
+);
 
 /*************************************************
  * Types
  *************************************************/
 export type ExpressionModeId = 'draw' | 'photo' | 'voice' | 'write';
-
 export interface ExpressionBase {
   timestamp: string;
   type: ExpressionModeId | 'text' | 'drawing' | 'photo' | 'voice';
 }
-
 export interface DrawingExpression extends ExpressionBase {
   type: 'drawing';
   data: string; // could be base64 or vector data reference
 }
-
 export interface PhotoExpression extends ExpressionBase {
   type: 'photo';
   data: string; // asset uri or base64 placeholder
 }
-
 export interface VoiceExpression extends ExpressionBase {
   type: 'voice';
   data: string; // audio clip reference
   duration: number; // seconds
 }
-
 export interface TextExpression extends ExpressionBase {
   type: 'text';
   data: string;
 }
-
 export type Expression = DrawingExpression | PhotoExpression | VoiceExpression | TextExpression | null;
-
 // Config for enabling/disabling modes or overriding labels/colors
 export interface ExpressGameConfig {
   enabledModes?: Partial<Record<ExpressionModeId, boolean>>;
@@ -42,7 +93,6 @@ export interface ExpressGameConfig {
   descriptions?: Partial<Record<ExpressionModeId, string>>;
   colors?: Partial<Record<ExpressionModeId, string>>;
 }
-
 // Session metadata that may be useful for analytics or storage
 export interface SessionData {
   sessionId: string;
@@ -50,14 +100,12 @@ export interface SessionData {
   startedAt?: string;
   // Extend as needed with app-specific fields
 }
-
 interface Props {
   age: number;
   config: ExpressGameConfig;
   sessionData?: SessionData;
   onComplete: (data: { mode: ExpressionModeId | null; expression: Exclude<Expression, null>; timestamp: string }) => void;
 }
-
 /*************************************************
  * Constants
  *************************************************/
@@ -69,28 +117,27 @@ interface ModeMeta {
   description: string;
   ageMin: number;
 }
-
 const DEFAULT_MODES: ModeMeta[] = [
   { id: 'draw', title: 'Draw It', icon: Palette, color: '#8B5CF6', description: 'Draw how you feel', ageMin: 8 },
   { id: 'photo', title: 'Photo Story', icon: Camera, color: '#059669', description: 'Take a picture that shows your mood', ageMin: 10 },
   { id: 'voice', title: 'Voice Note', icon: Mic, color: '#DC2626', description: 'Record how you feel', ageMin: 12 },
   { id: 'write', title: 'Write It', icon: FileText, color: '#EA580C', description: 'Write about your feelings', ageMin: 13 },
 ];
-
 /*************************************************
  * Hook: useExpressionSimulations
  * - Encapsulates the demo/simulation flows for each mode
  *************************************************/
-function useExpressionSimulations(setExpression: React.Dispatch<React.SetStateAction<Expression>>, setIsRecording: (v: boolean) => void) {
+function useExpressionSimulations(
+  setExpression: React.Dispatch<React.SetStateAction<Expression>>,
+  setIsRecording: (v: boolean) => void
+) {
   const simulateDrawing = useCallback(() => {
-    // In a real app, this would open a drawing canvas
     setTimeout(() => {
       setExpression({ type: 'drawing', data: 'drawing_data_placeholder', timestamp: new Date().toISOString() });
-    }, 2000);
+    }, 1200);
   }, [setExpression]);
 
   const simulatePhoto = useCallback(() => {
-    // In a real app, this would open camera
     Alert.alert(
       'Camera Access',
       'This would open the camera to take a mood photo',
@@ -110,20 +157,18 @@ function useExpressionSimulations(setExpression: React.Dispatch<React.SetStateAc
     setIsRecording(true);
     setTimeout(() => {
       setIsRecording(false);
-      setExpression({ type: 'voice', data: 'voice_data_placeholder', duration: 15, timestamp: new Date().toISOString() });
-    }, 3000);
+      setExpression({ type: 'voice', data: 'voice_data_placeholder', duration: 12, timestamp: new Date().toISOString() });
+    }, 1800);
   }, [setExpression, setIsRecording]);
 
   const simulateWriting = useCallback(() => {
-    // In a real app, this would open a text input
     setExpression({ type: 'text', data: 'Sample text about feelings...', timestamp: new Date().toISOString() });
   }, [setExpression]);
 
   return { simulateDrawing, simulatePhoto, simulateVoiceRecording, simulateWriting };
 }
-
 /*************************************************
- * UI Subcomponents
+ * UI Subcomponents with animations/micro-interactions
  *************************************************/
 const ModeCard = ({
   title,
@@ -138,8 +183,14 @@ const ModeCard = ({
   Icon: React.ComponentType<{ color?: string; size?: number }>;
   onPress: () => void;
 }) => (
-  <TouchableOpacity style={[styles.modeCard, { borderColor: color }]} onPress={onPress}>
-    <View style={[styles.modeIcon, { backgroundColor: `${color}1A` }]}> {/* 10% opacity bg */}
+  <TouchableOpacity
+    accessibilityRole="button"
+    accessibilityLabel={`${title}. ${description}`}
+    onPress={onPress}
+    activeOpacity={0.85}
+    style={[styles.modeCard, { borderColor: color }]}
+  >
+    <View style={[styles.modeIcon, { backgroundColor: `${color}10` }]}> {/* light tint */}
       <Icon color={color} size={32} />
     </View>
     <Text style={styles.modeTitle}>{title}</Text>
@@ -148,13 +199,20 @@ const ModeCard = ({
 );
 
 const PrimaryButton = ({ title, onPress, disabled }: { title: string; onPress: () => void; disabled?: boolean }) => (
-  <TouchableOpacity style={[styles.completeButton, disabled && { opacity: 0.6 }]} onPress={onPress} disabled={disabled}>
+  <TouchableOpacity
+    accessibilityRole="button"
+    accessibilityLabel={title}
+    onPress={onPress}
+    disabled={disabled}
+    activeOpacity={0.9}
+    style={[styles.completeButton, disabled && { opacity: 0.6 }]}
+  >
     <Text style={styles.completeText}>{title}</Text>
   </TouchableOpacity>
 );
 
 const SecondaryButton = ({ title, onPress }: { title: string; onPress: () => void }) => (
-  <TouchableOpacity style={styles.backButton} onPress={onPress}>
+  <TouchableOpacity accessibilityRole="button" accessibilityLabel={title} onPress={onPress} style={styles.backButton}>
     <Text style={styles.backText}>{title}</Text>
   </TouchableOpacity>
 );
@@ -166,6 +224,7 @@ export function ExpressGame({ age, config, onComplete }: Props) {
   const [selectedMode, setSelectedMode] = useState<ExpressionModeId | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [expression, setExpression] = useState<Expression>(null);
+  const [confetti, setConfetti] = useState(false);
 
   // Encapsulated simulations
   const { simulateDrawing, simulatePhoto, simulateVoiceRecording, simulateWriting } = useExpressionSimulations(
@@ -187,6 +246,15 @@ export function ExpressGame({ age, config, onComplete }: Props) {
   const availableModes = useMemo(() => {
     return modes.filter((m) => age >= m.ageMin && (config?.enabledModes?.[m.id] ?? true));
   }, [age, modes, config]);
+
+  // Mood-reactive theming (based on selected mode dominant color)
+  const theme = useMemo(() => {
+    const activeColor = modes.find((m) => m.id === selectedMode)?.color;
+    if (!activeColor) return { a: '#E0F2FE', b: '#F5F3FF' }; // calm default
+    // create a complementary pair by shifting toward white and a warm tint
+    const warm = '#FFD6A5';
+    return { a: `${activeColor}22`, b: warm };
+  }, [selectedMode, modes]);
 
   // Handle mode selection and trigger simulations
   const handleModeSelect = useCallback(
@@ -210,22 +278,28 @@ export function ExpressGame({ age, config, onComplete }: Props) {
     [simulateDrawing, simulatePhoto, simulateVoiceRecording, simulateWriting]
   );
 
-  // Continue to parent with captured expression
+  // Continue to parent with captured expression and trigger confetti
   const handleComplete = useCallback(() => {
     if (expression) {
+      setConfetti(true);
+      setTimeout(() => setConfetti(false), 1400);
       onComplete({ mode: selectedMode, expression, timestamp: new Date().toISOString() });
     }
   }, [expression, onComplete, selectedMode]);
 
   return (
     <View style={styles.container}>
+      <MoodBackdrop colorA={theme.a} colorB={theme.b} />
+
       {/* Header */}
-      <Text style={[styles.title, { fontSize: 20 }]}>Express Your Feelings</Text>
-      <Text style={styles.subtitle}>Choose how you'd like to share what's in your heart</Text>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+        <Text style={[styles.title]}>Express Your Feelings</Text>
+        <Text style={styles.subtitle}>Choose how you'd like to share what's in your heart</Text>
+      </View>
 
       {/* Mode Picker or Activity Area */}
       {!selectedMode ? (
-        <View style={styles.modeGrid}>
+        <View style={[styles.modeGrid, { paddingHorizontal: 16 }]}>          
           {availableModes.map((mode) => (
             <ModeCard
               key={mode.id}
@@ -238,7 +312,7 @@ export function ExpressGame({ age, config, onComplete }: Props) {
           ))}
         </View>
       ) : (
-        <View style={styles.expressionArea}>
+        <View style={[styles.expressionArea, { padding: 16 }]}>
           {/* Drawing */}
           {selectedMode === 'draw' && (
             <View style={styles.drawingArea}>
@@ -249,7 +323,6 @@ export function ExpressGame({ age, config, onComplete }: Props) {
               </View>
             </View>
           )}
-
           {/* Photo */}
           {selectedMode === 'photo' && (
             <View style={styles.photoArea}>
@@ -260,13 +333,12 @@ export function ExpressGame({ age, config, onComplete }: Props) {
               </View>
             </View>
           )}
-
           {/* Voice */}
           {selectedMode === 'voice' && (
             <View style={styles.voiceArea}>
               <Text style={styles.activityTitle}>Voice Note</Text>
               <View style={styles.voicePlaceholder}>
-                <Mic color={isRecording ? '#DC2626' : '#9CA3AF'} size={48} />
+                <Mic color={isRecording ? '#F59E0B' : '#DC2626'} size={48} />
                 <Text style={styles.placeholderText}>
                   {isRecording ? 'Recording...' : expression ? 'Recording completed!' : 'Tap to record'}
                 </Text>
@@ -278,7 +350,6 @@ export function ExpressGame({ age, config, onComplete }: Props) {
               </View>
             </View>
           )}
-
           {/* Write */}
           {selectedMode === 'write' && (
             <View style={styles.writeArea}>
@@ -289,7 +360,6 @@ export function ExpressGame({ age, config, onComplete }: Props) {
               </View>
             </View>
           )}
-
           {/* Actions */}
           <View style={styles.actionButtons}>
             <SecondaryButton
@@ -299,10 +369,18 @@ export function ExpressGame({ age, config, onComplete }: Props) {
                 setExpression(null);
               }}
             />
-            {expression && <PrimaryButton title="Continue" onPress={handleComplete} />}
+            <PrimaryButton title="Celebrate & Continue" onPress={handleComplete} disabled={!expression} />
           </View>
         </View>
       )}
+
+      {/* Confetti celebration overlay */}
+      <ConfettiBurst show={confetti} />
+
+      {/* Decorative sparkle in corner to add whimsy */}
+      <View style={styles.sparkleBadge} accessibilityElementsHidden>
+        <Sparkles color="#A78BFA" size={18} />
+      </View>
     </View>
   );
 }
@@ -311,81 +389,12 @@ export function ExpressGame({ age, config, onComplete }: Props) {
  * Styles
  *************************************************/
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  title: { fontWeight: '600', color: '#1F2937', textAlign: 'center', marginBottom: 8, lineHeight: 28 },
-  subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  modeGrid: { gap: 16 },
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  title: { fontWeight: '700', color: '#111827', textAlign: 'center', marginBottom: 6, fontSize: 20 },
+  subtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginBottom: 18, lineHeight: 20 },
+  modeGrid: { gap: 12 },
   modeCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 14,
+    padding: 16,
     alignItems: 'center',
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  modeIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  modeTitle: { fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 4 },
-  modeDescription: { fontSize: 14, color: '#6B7280', textAlign: 'center' },
-  expressionArea: { flex: 1 },
-  activityTitle: { fontSize: 18, fontWeight: '600', color: '#1F2937', textAlign: 'center', marginBottom: 20 },
-  drawingArea: { flex: 1 },
-  canvasPlaceholder: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-  },
-  photoArea: { flex: 1 },
-  photoPlaceholder: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-  },
-  voiceArea: { flex: 1 },
-  voicePlaceholder: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-  },
-  writeArea: { flex: 1 },
-  writePlaceholder: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-  },
-  placeholderText: { fontSize: 16, color: '#6B7280', marginTop: 12, textAlign: 'center' },
-  recordingIndicator: { marginTop: 16 },
-  recordingDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#DC2626' },
-  actionButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  backButton: { flex: 1, backgroundColor: '#F3F4F6', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
-  backText: { color: '#374151', fontSize: 16, fontWeight: '600' },
-  completeButton: { flex: 1, backgroundColor: '#059669', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
-  completeText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-});
